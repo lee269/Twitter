@@ -1,0 +1,146 @@
+---
+title: "DefraStats Twitter Account"
+author: "David Lee"
+date: "10/12/2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# load up required libraries
+library(twitteR)
+library(dplyr)
+library(lubridate)
+library(igraph)
+library(networkD3)
+library(readr)
+library(here)
+
+twitterkeys <- readRDS(here("twitterkeys", "twitterkeys.rds"))
+
+setup_twitter_oauth(consumer_key = twitterkeys$consumer_key, 
+                    consumer_secret = twitterkeys$consumer_secret,
+                    access_token = twitterkeys$access_token, 
+                    access_secret = twitterkeys$access_secret)
+
+# read in helper functions
+source("~/Twitter/friendsnet.R")
+```
+
+## Playing about with Twitter Data
+
+First we need access to twitter. Then we can start to explore.
+
+
+### Accessing the Twitter API
+
+Describe how to sign up and access the twitter API to be able to get data. Now we can run some code to connect:
+
+
+```{r, eval = FALSE}
+
+# load up required libraries. twitteR only is needed, but we will use some of
+# the others later.
+library(twitteR)
+library(dplyr)
+library(lubridate)
+library(igraph)
+library(networkD3)
+library(readr)
+
+# read in helper functions. Not needed to connect to twitter, but we'll use
+# these later.
+source("~/Twitter/friendsnet.R")
+
+# connect to twitter. Ive savedmy keys in an RDS data file so that I don't have
+# to expose them in this code. Wouldn't want you stealing my keys!
+twitterkeys <- readRDS("~/Twitter/twitterkeys.rds")
+
+setup_twitter_oauth(consumer_key = twitterkeys$consumer_key, 
+                    consumer_secret = twitterkeys$consumer_secret,
+                    access_token = twitterkeys$access_token, 
+                    access_secret = twitterkeys$access_secret)
+
+```
+
+### We're in!
+
+Cool. Let's start with some exploration.
+
+```{r, eval = FALSE}
+
+# We get details of the DefraStats account
+defrastats = getUser('DefraStats')
+
+# Let's look at our followers
+followers <- defrastats$getFollowers()
+followersdf <- twListToDF(followers) # it might be easier to have this as a dataframe
+
+# We can save this data for future analysis
+write.csv(followersdf, file = "~/Twitter/defrastats.csv")
+
+```
+
+Let's take a look at our data.
+
+```{r followers, echo = FALSE, results = "asis"}
+
+followersdf <- read.csv(file = "~/Twitter/defrastats.csv", header = TRUE)
+
+knitr::kable(head(followersdf))
+
+```
+
+### What can we say about our followers
+
+Theres a fair amound of informaion here. What can we do with it?
+
+### Networks
+
+```{r networks, echo=FALSE}
+
+user <- read_csv("~/Twitter/DefraStats.csv")
+
+user <- user %>% 
+        mutate(friend = "DefraStats") %>% 
+        select(friend, follows = name)
+
+
+folls <- read_csv("~/Twitter/DefraStats_friends.csv")
+colnames(folls) <- c("friend", "follows")
+
+all <- rbind(user, folls)
+
+el <- count(all, friend, follows)
+
+friend_graph <- graph_from_data_frame(d = el, directed = T)
+
+lay <- layout_with_kk(friend_graph)
+par(bg="white", mar=c(1,1,1,1))
+plot(friend_graph, 
+     layout = lay,
+     vertex.color = "wheat3",
+     vertex.size = 10,
+     vertex.label.family = "sans",
+     vertex.shape = "circle",
+     vertex.label.color = "black",
+     edge.arrow.size = 0.2,
+     edge.arrow.width = 0.2)
+
+
+```
+
+Interactivity
+
+```{r d3}
+
+wc <- cluster_walktrap(friend_graph)
+members <- membership(wc)
+d3_rt <- igraph_to_networkD3(friend_graph, group = members)
+
+forceNetwork(Links = d3_rt$links, Nodes = d3_rt$nodes, 
+             Source = 'source', Target = 'target', 
+             NodeID = 'name', Group = 'group', fontSize = 12, zoom = TRUE)
+
+```
